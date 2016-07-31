@@ -36,6 +36,7 @@ class ApplicationController < ActionController::Base
 
   class Board
 
+    MAX_ALLOWED_STEPS = 5 #toggle to make the game unbeatable or efficient
     @@moves_and_scores = {}
     @game_board = nil
 
@@ -51,10 +52,15 @@ class ApplicationController < ActionController::Base
 
     def get_best_move_and_score(player_turn=false, nth_step = 1)
       return [nil, score, nth_step] if game_ended?
+      return [nil, 0, nth_step] if (nth_step > MAX_ALLOWED_STEPS)
       nth_step += 1
       possible_move_scores = {}
       all_moves = get_all_possible_moves(player_turn)
-      all_moves.each {|move| possible_move_scores[move] = get_move_score_if_needed(move, player_turn, nth_step)}
+      all_moves.each {|move|
+        score = get_move_score_if_needed(move, player_turn, nth_step)
+        possible_move_scores[move] = score
+        break if (score[0] ==( 10 * (player_turn ? -1 : 1)))
+      }
       best_move, scores = possible_move_scores.max_by {|move, score| (score[0]/score[1]) * (player_turn ? -1 : 1) }
       [best_move, scores[0], scores[1]]
     end
