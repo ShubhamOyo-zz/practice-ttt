@@ -5,8 +5,8 @@ class ApplicationController < ActionController::Base
 
 
   def handle_move
-    Board.flush
     board = Board.setup_with_current_state(get_current_state)
+    Board.flush(board)
     next_move, score, nth_step = board.get_best_move_and_score
     status = Board.setup_with_current_state(next_move).won ? 'Won' : Board.setup_with_current_state(next_move).draw ? 'Draw' : 'Game On!'
     render :json => {given_move: vv(board.game_board), suggested_move: vv(next_move), delta: board.delta(next_move), status: status}
@@ -36,11 +36,17 @@ class ApplicationController < ActionController::Base
 
   class Board
 
-    MAX_ALLOWED_STEPS = 5 #toggle to make the game unbeatable or efficient
+    TOTAL_MOVES_TO_CHECK_COMPUTATIONS = 2000
+
     @@moves_and_scores = {}
+    @@max_allowed_steps = nil #toggle to make the game unbeatable or efficient
     @game_board = nil
 
-    def self.flush ; @@moves_and_scores={} ; end
+    def self.flush(board)
+      @@moves_and_scores={}
+      @@max_allowed_steps = board.allowed_steps
+    end
+
     def game_board=(board) ; @game_board=board ; end
     def game_board ; @game_board ; end
 
@@ -52,7 +58,7 @@ class ApplicationController < ActionController::Base
 
     def get_best_move_and_score(player_turn=false, nth_step = 1)
       return [nil, score, nth_step] if game_ended?
-      return [nil, 0, nth_step] if (nth_step > MAX_ALLOWED_STEPS)
+      return [nil, 0, nth_step] if (nth_step > @@max_allowed_steps)
       nth_step += 1
       possible_move_scores = {}
       all_moves = get_all_possible_moves(player_turn)
@@ -119,6 +125,10 @@ class ApplicationController < ActionController::Base
           return [r_ind, c_ind] if @game_board[r_ind][c_ind] != board[r_ind][c_ind]
         }
       }
+    end
+
+    def allowed_steps
+      Math.log(TOTAL_MOVES_TO_CHECK_COMPUTATIONS, game_board.length**2).round
     end
   end
 
