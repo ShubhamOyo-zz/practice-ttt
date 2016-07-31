@@ -3,13 +3,25 @@ class ApplicationController < ActionController::Base
   # For APIs, you may want to use :null_session instead.
   protect_from_forgery with: :exception
 
-  
+
   def handle_move
     Board.flush
     board = Board.setup_with_current_state(get_current_state)
-    next_move, score = board.get_best_move_and_score(player_turn = false)
+    next_move, score, nth_step = board.get_best_move_and_score
     status = Board.setup_with_current_state(next_move).won ? 'Won' : Board.setup_with_current_state(next_move).draw ? 'Draw' : 'Game On!'
-    render :json => {given_move: board.game_board, suggested_move: next_move, status: status}
+    render :json => {given_move: vv(board.game_board), suggested_move: vv(next_move), delta: board.delta(next_move), status: status}
+  end
+
+  def vv(str)
+    arr = []
+    str.each {|i|
+      a = ""
+      i.each {|el|
+      a += (el.nil? ? '- ' : (el ? '1 ' : 'O ') )
+      }
+      arr << a
+    }
+    arr
   end
 
   private
@@ -37,12 +49,14 @@ class ApplicationController < ActionController::Base
       new_board
     end
 
-    def get_best_move_and_score(player_turn)
-      return [nil, score] if game_ended?
+    def get_best_move_and_score(player_turn=false, nth_step = 1)
+      return [nil, score, nth_step] if game_ended?
+      nth_step += 1
       possible_move_scores = {}
       all_moves = get_all_possible_moves(player_turn)
-      all_moves.each {|move| next_move, possible_move_scores[move] = get_move_score_if_needed(move, player_turn)}
-      possible_move_scores.max_by {|move, score| score * (player_turn ? -1 : 1) }
+      all_moves.each {|move| possible_move_scores[move] = get_move_score_if_needed(move, player_turn, nth_step)}
+      best_move, scores = possible_move_scores.max_by {|move, score| (score[0]/score[1]) * (player_turn ? -1 : 1) }
+      [best_move, scores[0], scores[1]]
     end
 
     def game_ended?
@@ -67,9 +81,9 @@ class ApplicationController < ActionController::Base
       all_moves
     end
 
-    def get_move_score_if_needed(move, player_turn)
-      @@moves_and_scores[move] = Board.setup_with_current_state(move).get_best_move_and_score(!player_turn) if @@moves_and_scores[move].blank?
-      @@moves_and_scores[move]
+    def get_move_score_if_needed(move, player_turn, nth_step)
+      move, @@moves_and_scores[move], nth_step = Board.setup_with_current_state(move).get_best_move_and_score(!player_turn, nth_step) if @@moves_and_scores[move].blank?
+      [@@moves_and_scores[move], nth_step]
     end
 
     def won
@@ -93,6 +107,13 @@ class ApplicationController < ActionController::Base
       return true
     end
 
+    def delta(board)
+      @game_board.each_with_index {|row, r_ind|
+        @game_board.each_with_index {|el, c_ind|
+          return [r_ind, c_ind] if @game_board[r_ind][c_ind] != board[r_ind][c_ind]
+        }
+      }
+    end
   end
 
 end
